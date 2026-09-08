@@ -11,8 +11,7 @@ const app = express();
 const bot = new line.Client(config);
 
 const ADMIN_ID = process.env.ADMIN_ID;           // ← ここで設定
-const protectedUsers = new Set(Ud1066a8c57c09ff166fac3b7aa158785);
-
+const protectedUsers = new Set(['Ud1066a8c57c09ff166fac3b7aa158785']); // ← 初期保護ユーザーを追加
 
 app.get('/', (req, res) => res.send('LINE Kick Bot is running'));
 app.get('/health', (req, res) => res.send('OK'));
@@ -56,9 +55,9 @@ async function handleEvent(event) {
         return replyMessage(replyToken, `👥 保護リスト: ${Array.from(protectedUsers).join(', ') || 'なし'}`);
       case 'kick':
         if (!isAdmin) return replyError(replyToken);
-        if (!args([https://line.me/R/ti/g/Gf4SBWGzdt]) return replyError(replyToken);
+        if (!args[1]) return replyError(replyToken);
         try {
-          await bot.leaveGroup(args https://line.me/R/ti/g/Gf4SBWGzdt]);           // グループIDを指定
+          await bot.leaveGroup(args[1]);           // グループIDを指定
           return replyMessage(replyToken, `🚪 @${args[1]} をグループから蹴りました`);
         } catch (e) {
           return replyError(replyToken, '❌ 蹴る権限がありません');
