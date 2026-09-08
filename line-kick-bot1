@@ -11,7 +11,7 @@ if ($data['events'][0]['type'] === 'message') {
     // 蹴り関連ワード検知（例：蹴り、蹴る、kicking など）
     if (preg_match('/蹴り|蹴る|kicking/i', $text)) {
         // キック処理（公式API）
-        $accessToken = 'あなたのチャンネルアクセストークン';
+        $accessToken = 'Biutplvf5kCG1cHSrqFHLGIRn8sWZzfs35526bipqQL16BAzUIGM9aWqqlb7Mgvn+hapsK4/DJLzM8CxPEA+Ed03+NAMo68d3IaDCgh77miYPuxJhnzMjFJ6gOHjmvK7OTqOWDzXHBFU/Wk6pH1J+AdB04t89/1O/w1cDnyilFU=';
         // キックAPI呼び出し（無料）
         // 成功したらスプレッドシートに記録
     }
