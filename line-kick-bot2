@@ -1,0 +1,65 @@
+import os
+import requests
+from flask import Flask, request, jsonify
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+
+# ==================== 設定 ====================
+DISCORD_WEBHOOK = "YOUR_DISCORD_WEBHOOK_URL"  # ← ここをDiscordのWebhook URLに変更
+LINE_CHANNEL_SECRET = "YOUR_LINE_CHANNEL_SECRET"  # LINE Developersからコピー
+MANAGE_USER = "YOUR_DISCORD_USER_ID"  # 管理用のDiscordユーザーID（@で指定）
+
+# 蹴り記録（5分以内の同じ蹴りは1回としてカウント）
+kick_history = {}  # { "user_id": "2025-09-09 10:00" }
+KICK_TIMEOUT = 300  # 5分
+
+@app.route('/line-webhook', methods=['POST'])
+def line_webhook():
+    data = request.json
+    if data.get("events")[0]["type"] != "message":
+        return "", 200
+
+    event = data["events"][0]
+    msg = event["message"]["text"]
+    user_id = event["source"]["userId"]
+    now = datetime.now()
+
+    # 蹴り判定（超シンプルに「蹴り」ワード）
+    is_kick = "蹴り" in msg or "蹴った" in msg or "蹴られ" in msg or "蹴っ" in msg
+
+    if is_kick:
+        # 同じ蹴り履歴があれば無視
+        last_time = kick_history.get(user_id)
+        if last_time and (now - datetime.fromisoformat(last_time)).seconds < KICK_TIMEOUT:
+            return "", 200
+
+        kick_history[user_id] = now.isoformat()
+        content = f"🚨 **蹴り検知！**\n\nユーザーID: `{user_id}`\nメッセージ: `{msg}`\n\n{now.strftime('%Y-%m-%d %H:%M')}\n"
+        
+        # Discord通知
+        requests.post(DISCORD_WEBHOOK, json={"content": content})
+        
+        # オプション：蹴った相手を自動ブロック（Discord側の設定が必要）
+        # requests.post(f"https://discord.com/api/users/@me/channels", json={"recipients": [user_id]})
+
+    return "", 200
+
+
+# 管理コマンド（Discordから送信可能）
+@app.route('/manage', methods=['POST'])
+def manage():
+    data = request.json
+    if data.get("content", "").startswith("!reset") and data.get("author", {}).get("id") == MANAGE_USER:
+        kick_history.clear()
+        return jsonify({"status": "蹴り記録をリセットしました"})
+    
+    if data.get("content", "").startswith("!stat"):
+        total = len(kick_history)
+        return jsonify({"status": f"蹴り統計: {total}回"})
+    
+    return "", 200
+
+
+if __name__ == '__main__':
+    app.run(port=10000)
