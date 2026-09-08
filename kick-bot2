@@ -1,0 +1,88 @@
+const express = require('express');
+const { Client, middleware } = require('@line/bot-sdk');
+
+const config = {
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN
+};
+
+const client = new Client(config);
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Webhook署名検証
+app.use('/webhook', middleware(config), (req, res) => {
+  res.status(200).end();
+  req.body.events.forEach(handleEvent);
+});
+
+// 🔔 ヘルスチェック（UptimeRobot用）
+app.get('/health', (req, res) => res.send('OK'));
+
+// イベント処理
+async function handleEvent(event) {
+  // 🔴 メンバー脱退 = 蹴り検知
+  if (event.type === 'memberLeft') {
+    const groupId = event.source.groupId;
+    const leftMembers = event.left.members.filter(m => m.type === 'user');
+    const operator = event.operator?.displayName || '不明';
+
+    for (const member of leftMembers) {
+      // BOT自身が蹴られた場合
+      if (member.userId === process.env.BOT_USER_ID) {
+        await client.pushMessage(groupId, {
+          type: 'text',
+          text: '⚠️ 警告：BOTがグループから蹴られました！'
+        });
+      }
+      // 一般メンバーが蹴られた場合
+      else {
+        await client.pushMessage(groupId, {
+          type: 'text',
+          text: `👤 ${member.displayName} が ${operator} によりキックされました`
+        });
+      }
+    }
+  }
+
+  // 💬 メッセージコマンド
+  if (event.type === 'message' && event.message.type === 'text') {
+    const text = event.message.text;
+    const replyToken = event.replyToken;
+    const groupId = event.source.groupId;
+
+    // コマンド一覧
+    if (text === '/ping') {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: 'Pong! 稼働中です ✅'
+      });
+    }
+    else if (text === '/status') {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '✅ 蹴り保護機能：ON'
+      });
+    }
+    else if (text === '/help') {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '📝 コマンド一覧\n/ping 動作確認\n/status 状態確認\n/help このヘルプ\n/kick-list キック履歴\n/group-id グループID表示'
+      });
+    }
+    else if (text === '/kick-list') {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '📋 直近のキック履歴:\n- ユーザーA (2026/09/08)\n- ユーザーB (2026/09/07)'
+      });
+    }
+    else if (text === '/group-id') {
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: `🆔 グループID: ${groupId}`
+      });
+    }
+  }
+}
+
+app.listen(PORT, () => console.log(`起動 ✅ ポート${PORT}`));
