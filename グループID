@@ -1,0 +1,5 @@
+source = event.get("source", {})
+
+if source.get("type") == "group":
+    group_id = source.get("groupId")
+    print("LINEグループID:", group_id)
