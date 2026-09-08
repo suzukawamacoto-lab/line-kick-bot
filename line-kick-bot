@@ -1,0 +1,90 @@
+const express = require('express');
+const line = require('@line/bot-sdk');
+require('dotenv').config();
+
+const config = {
+  channelSecret: process.env.CHANNEL_SECRET,
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN
+};
+
+const app = express();
+const bot = new line.Client(config);
+
+const ADMIN_ID = process.env.ADMIN_ID;           // ← ここで設定
+const protectedUsers = new Set(Ud1066a8c57c09ff166fac3b7aa158785);
+
+
+app.get('/', (req, res) => res.send('LINE Kick Bot is running'));
+app.get('/health', (req, res) => res.send('OK'));
+
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  const events = req.body.events;
+
+  Promise.all(events.map(handleEvent))
+    .then(() => res.status(200).end())
+    .catch(err => console.error(err));
+});
+
+async function handleEvent(event) {
+  if (event.type !== 'message' || !event.message.text) return;
+
+  const { replyToken, source, message } = event;
+  const { userId } = source;
+  let text = message.text.trim();
+
+  if (!text.startsWith('/')) return;
+
+  text = text.slice(1);           // /help → help
+  const args = text.split(/\s+/);
+  const cmd = args[0].toLowerCase();
+  const isAdmin = userId === ADMIN_ID;
+
+  try {
+    switch (cmd) {
+      case 'help':
+        return replyMessage(replyToken, '📋 コマンド一覧\n/help - このメッセージ\n/protect @user - 保護リストに追加\n/unprotect @user - 保護解除\n/prolist - 保護リスト表示\n/kick @user - グループから蹴る');
+      case 'protect':
+        if (!isAdmin) return replyError(replyToken);
+        if (args[1]) protectedUsers.add(args[1]);
+        return replyMessage(replyToken, '✅ 保護しました');
+      case 'unprotect':
+        if (!isAdmin) return replyError(replyToken);
+        if (args[1]) protectedUsers.delete(args[1]);
+        return replyMessage(replyToken, '✅ 保護を解除しました');
+      case 'prolist':
+        if (!isAdmin) return replyError(replyToken);
+        return replyMessage(replyToken, `👥 保護リスト: ${Array.from(protectedUsers).join(', ') || 'なし'}`);
+      case 'kick':
+        if (!isAdmin) return replyError(replyToken);
+        if (!args([https://line.me/R/ti/g/Gf4SBWGzdt]) return replyError(replyToken);
+        try {
+          await bot.leaveGroup(args https://line.me/R/ti/g/Gf4SBWGzdt]);           // グループIDを指定
+          return replyMessage(replyToken, `🚪 @${args[1]} をグループから蹴りました`);
+        } catch (e) {
+          return replyError(replyToken, '❌ 蹴る権限がありません');
+        }
+      default:
+        return replyError(replyToken, '❌ 不明なコマンドです');
+    }
+  } catch (err) {
+    console.error(err);
+    return replyError(replyToken, '❌ エラーが発生しました');
+  }
+}
+
+function replyMessage(replyToken, text) {
+  return bot.replyMessage(replyToken, {
+    type: 'text',
+    text: text
+  });
+}
+
+function replyError(replyToken, message = '❌ エラーが発生しました') {
+  return bot.replyMessage(replyToken, {
+    type: 'text',
+    text: message
+  });
+}
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`🚀 LINE Kick Bot listening on port ${port}`));
