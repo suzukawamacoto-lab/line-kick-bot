@@ -1,0 +1,18 @@
+<?php
+// https://line-protection-bot-1.onrender.com/callback
+$body = file_get_contents('php://input');
+$data = json_decode($body, true);
+
+if ($data['events'][0]['type'] === 'message') {
+    $text = $data['events'][0]['message']['text'];
+    $groupId = $data['events'][0]['source']['groupId'];
+    $userId = $data['events'][0]['source']['userId'];
+
+    // 蹴り関連ワード検知（例：蹴り、蹴る、kicking など）
+    if (preg_match('/蹴り|蹴る|kicking/i', $text)) {
+        // キック処理（公式API）
+        $accessToken = 'あなたのチャンネルアクセストークン';
+        // キックAPI呼び出し（無料）
+        // 成功したらスプレッドシートに記録
+    }
+}
