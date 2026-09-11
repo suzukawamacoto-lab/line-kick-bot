@@ -1,8 +1,5 @@
 const express = require('express');
 const { Client, Middleware } = require('@line/bot-sdk');
-const fs = require('fs');
-const path = require('path');
-
 const app = express();
 
 // 環境変数から設定を読み込み
@@ -17,7 +14,7 @@ const middleware = Middleware(config);
 // 保護中のユーザーを保存
 const protectUsers = new Set();
 
-// ヘルスチェック用
+// ヘルスチェック
 app.get('/health', (req, res) => {
   res.send('OK');
 });
@@ -28,45 +25,42 @@ app.post('/webhook', middleware, async (req, res) => {
   const events = req.body.events;
 
   for (const event of events) {
+    // メッセージコマンド処理
     if (event.type === 'message' && event.message.type === 'text') {
       const text = event.message.text;
       const userId = event.source.userId;
-      const groupId = event.source.groupId;
 
-      // 保護コマンド
       if (text === '/kick protect') {
         protectUsers.add(userId);
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: '✅ このユーザーを蹴り保護しました！'
         });
-      }
-      // 保護解除コマンド
-      else if (text === '/kick unprotect') {
+      } else if (text === '/kick unprotect') {
         protectUsers.delete(userId);
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: '❌ 蹴り保護を解除しました！'
         });
-      }
-      // 保護リスト確認
-      else if (text === '/kick list') {
+      } else if (text === '/kick list') {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `🛡️ 保護中のユーザー数: ${protectUsers.size}人`
+          text: `🛡️ 保護中のユーザー: ${protectUsers.size}人`
         });
       }
     }
 
-    // メンバー退出イベント（蹴り検知）
+    // 誰かが蹴られた/退出した時の検知
     if (event.type === 'memberLeft') {
       const leftMembers = event.left.members;
+      const groupId = event.source.groupId;
+
       for (const member of leftMembers) {
         if (protectUsers.has(member.userId)) {
-          // 保護されているユーザーが蹴られた場合、通知
-          await client.pushMessage(event.source.groupId, {
+          // 保護中のユーザーが蹴られた → 警告通知
+          await client.pushMessage(groupId, {
             type: 'text',
-            text: `⚠️ 保護中のユーザーが退出させられました！\nUserID: ${member.userId}`
+            text: `⚠️ 【警告】保護中のユーザーが退出させられました！\nUserID: ${member.userId}`
           });
         }
       }
