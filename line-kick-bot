@@ -1,89 +1,80 @@
 const express = require('express');
-const line = require('@line/bot-sdk');
-require('dotenv').config();
-
-const config = {
-  channelSecret: process.env.CHANNEL_SECRET,
-  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN
-};
+const { Client, Middleware } = require('@line/bot-sdk');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-const bot = new line.Client(config);
 
-const ADMIN_ID = process.env.ADMIN_ID;           // ← ここで設定
-const protectedUsers = new Set(['Ud1066a8c57c09ff166fac3b7aa158785']); // ← 初期保護ユーザーを追加
+// 環境変数から設定を読み込み
+const config = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET,
+};
 
-app.get('/', (req, res) => res.send('LINE Kick Bot is running'));
-app.get('/health', (req, res) => res.send('OK'));
+const client = new Client(config);
+const middleware = Middleware(config);
 
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  const events = req.body.events;
+// 保護中のユーザーを保存
+const protectUsers = new Set();
 
-  Promise.all(events.map(handleEvent))
-    .then(() => res.status(200).end())
-    .catch(err => console.error(err));
+// ヘルスチェック用
+app.get('/health', (req, res) => {
+  res.send('OK');
 });
 
-async function handleEvent(event) {
-  if (event.type !== 'message' || !event.message.text) return;
+// Webhook
+app.post('/webhook', middleware, async (req, res) => {
+  res.sendStatus(200);
+  const events = req.body.events;
 
-  const { replyToken, source, message } = event;
-  const { userId } = source;
-  let text = message.text.trim();
+  for (const event of events) {
+    if (event.type === 'message' && event.message.type === 'text') {
+      const text = event.message.text;
+      const userId = event.source.userId;
+      const groupId = event.source.groupId;
 
-  if (!text.startsWith('/')) return;
-
-  text = text.slice(1);           // /help → help
-  const args = text.split(/\s+/);
-  const cmd = args[0].toLowerCase();
-  const isAdmin = userId === ADMIN_ID;
-
-  try {
-    switch (cmd) {
-      case 'help':
-        return replyMessage(replyToken, '📋 コマンド一覧\n/help - このメッセージ\n/protect @user - 保護リストに追加\n/unprotect @user - 保護解除\n/prolist - 保護リスト表示\n/kick @user - グループから蹴る');
-      case 'protect':
-        if (!isAdmin) return replyError(replyToken);
-        if (args[1]) protectedUsers.add(args[1]);
-        return replyMessage(replyToken, '✅ 保護しました');
-      case 'unprotect':
-        if (!isAdmin) return replyError(replyToken);
-        if (args[1]) protectedUsers.delete(args[1]);
-        return replyMessage(replyToken, '✅ 保護を解除しました');
-      case 'prolist':
-        if (!isAdmin) return replyError(replyToken);
-        return replyMessage(replyToken, `👥 保護リスト: ${Array.from(protectedUsers).join(', ') || 'なし'}`);
-      case 'kick':
-        if (!isAdmin) return replyError(replyToken);
-        if (!args[1]) return replyError(replyToken);
-        try {
-          await bot.leaveGroup(args[1]);           // グループIDを指定
-          return replyMessage(replyToken, `🚪 @${args[1]} をグループから蹴りました`);
-        } catch (e) {
-          return replyError(replyToken, '❌ 蹴る権限がありません');
-        }
-      default:
-        return replyError(replyToken, '❌ 不明なコマンドです');
+      // 保護コマンド
+      if (text === '/kick protect') {
+        protectUsers.add(userId);
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '✅ このユーザーを蹴り保護しました！'
+        });
+      }
+      // 保護解除コマンド
+      else if (text === '/kick unprotect') {
+        protectUsers.delete(userId);
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '❌ 蹴り保護を解除しました！'
+        });
+      }
+      // 保護リスト確認
+      else if (text === '/kick list') {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `🛡️ 保護中のユーザー数: ${protectUsers.size}人`
+        });
+      }
     }
-  } catch (err) {
-    console.error(err);
-    return replyError(replyToken, '❌ エラーが発生しました');
+
+    // メンバー退出イベント（蹴り検知）
+    if (event.type === 'memberLeft') {
+      const leftMembers = event.left.members;
+      for (const member of leftMembers) {
+        if (protectUsers.has(member.userId)) {
+          // 保護されているユーザーが蹴られた場合、通知
+          await client.pushMessage(event.source.groupId, {
+            type: 'text',
+            text: `⚠️ 保護中のユーザーが退出させられました！\nUserID: ${member.userId}`
+          });
+        }
+      }
+    }
   }
-}
+});
 
-function replyMessage(replyToken, text) {
-  return bot.replyMessage(replyToken, {
-    type: 'text',
-    text: text
-  });
-}
-
-function replyError(replyToken, message = '❌ エラーが発生しました') {
-  return bot.replyMessage(replyToken, {
-    type: 'text',
-    text: message
-  });
-}
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`🚀 LINE Kick Bot listening on port ${port}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
